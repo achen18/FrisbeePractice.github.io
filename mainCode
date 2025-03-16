@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Throw Force Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .output {
+            font-size: 20px;
+            margin: 20px;
+        }
+        .result {
+            font-size: 24px;
+            font-weight: bold;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1>Throw Force Calculator</h1>
+    <p>This app uses the phone's accelerometer to estimate the force of your throw.</p>
+    <div class="output">
+        <p>Acceleration X: <span id="accX">0</span> m/s²</p>
+        <p>Acceleration Y: <span id="accY">0</span> m/s²</p>
+        <p>Acceleration Z: <span id="accZ">0</span> m/s²</p>
+        <p class="result" id="forceResult">Throw Force: 0 N</p>
+    </div>
+
+    <script>
+        // Variables to store acceleration data
+        let accX = 0;
+        let accY = 0;
+        let accZ = 0;
+
+        // Function to handle the accelerometer data
+        function handleMotion(event) {
+            accX = event.acceleration.x;
+            accY = event.acceleration.y;
+            accZ = event.acceleration.z;
+
+            // Display the acceleration data
+            document.getElementById('accX').textContent = accX.toFixed(2);
+            document.getElementById('accY').textContent = accY.toFixed(2);
+            document.getElementById('accZ').textContent = accZ.toFixed(2);
+
+            // Calculate the "throw force"
+            const accelerationMagnitude = Math.sqrt(accX ** 2 + accY ** 2 + accZ ** 2); // Magnitude of the acceleration vector
+
+            // Assuming a simple force = mass * acceleration (F = m * a)
+            const massOfPhone = 0.2; // Mass of the phone in kg (approximate)
+            const force = massOfPhone * accelerationMagnitude;
+
+            // Display the force (in Newtons)
+            document.getElementById('forceResult').textContent = `Throw Force: ${force.toFixed(2)} N`;
+        }
+
+        // Check if the device supports DeviceMotionEvent
+        if (window.DeviceMotionEvent) {
+            window.addEventListener('devicemotion', handleMotion, true);
+        } else {
+            alert("DeviceMotion is not supported on this device.");
+        }
+    </script>
+</body>
+</html>
