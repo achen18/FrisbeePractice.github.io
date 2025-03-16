@@ -3,96 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Throw Force Calculator</title>
+    <title>Impact Force and Trajectory Measurement</title>
     <style>
+        /* General Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Body and Layout */
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f7fc;
+            color: #333;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
             text-align: center;
-            margin-top: 50px;
         }
-        .output {
-            font-size: 20px;
-            margin: 20px;
+
+        /* Container */
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
         }
-        .result {
-            font-size: 24px;
+
+        /* Title */
+        h1 {
+            font-size: 2.5em;
+            color: #4A90E2;
+            margin-bottom: 20px;
+        }
+
+        /* Button */
+        button {
+            padding: 12px 25px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        /* Data Display */
+        .data {
+            font-size: 1.3em;
+            color: #555;
+            margin: 15px 0;
+        }
+
+        /* Impact Force Styling */
+        #impact-force {
+            font-size: 1.5em;
             font-weight: bold;
-            color: green;
+            margin-top: 30px;
         }
-        .max-force {
-            font-size: 22px;
-            font-weight: bold;
-            color: blue;
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            button {
+                width: 100%;
+                padding: 14px;
+                font-size: 1.1em;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Throw Force Calculator</h1>
-    <p>This app uses the phone's accelerometer to estimate the force of your throw.</p>
-    <div class="output">
-        <p>Acceleration X: <span id="accX">0</span> m/s²</p>
-        <p>Acceleration Y: <span id="accY">0</span> m/s²</p>
-        <p>Acceleration Z: <span id="accZ">0</span> m/s²</p>
-        <p class="result" id="forceResult">Throw Force: 0 N</p>
-        <p class="max-force" id="maxForceResult">Max Force: 0 N</p>
+    <div class="container">
+        <h1>Measure Impact Force & Trajectory</h1>
+        <button id="start-button">Start Measurement</button>
+        <div class="data" id="impact-force">Impact Force: Waiting...</div>
+        <div class="data" id="velocity">Velocity: Waiting...</div>
+        <div class="data" id="distance-travelled">Distance Traveled: Waiting...</div>
+        <div id="trajectory"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Variables to store acceleration data
-        let accX = 0;
-        let accY = 0;
-        let accZ = 0;
-        let maxForce = 0; // Variable to track the maximum force during motion
-        let isMoving = false; // Flag to check if the device is still moving
+        let measuring = false;
+        let velocity = 0; // m/s
+        let displacement = 0; // meters
+        let accelerationHistory = [];
+        let lastUpdate = Date.now();
+        let force = 0;
+        let trajectoryData = {
+            labels: [],
+            datasets: [{
+                label: 'Trajectory',
+                data: [],
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 2,
+                fill: false,
+                tension: 0.1
+            }]
+        };
 
-        // Function to handle the accelerometer data
-        function handleMotion(event) {
-            accX = event.acceleration.x;
-            accY = event.acceleration.y;
-            accZ = event.acceleration.z;
+        const g = 9.81;  // gravity constant in m/s²
+        const mass = 0.2;  // Assume a phone mass of 200g
 
-            // Display the acceleration data
-            document.getElementById('accX').textContent = accX.toFixed(2);
-            document.getElementById('accY').textContent = accY.toFixed(2);
-            document.getElementById('accZ').textContent = accZ.toFixed(2);
-
-            // Calculate the magnitude of the acceleration
-            const accelerationMagnitude = Math.sqrt(accX ** 2 + accY ** 2 + accZ ** 2);
-
-            // Assuming a simple force = mass * acceleration (F = m * a)
-            const massOfPhone = 0.2; // Mass of the phone in kg (approximate)
-            const force = massOfPhone * accelerationMagnitude;
-
-            // Update the current force display
-            document.getElementById('forceResult').textContent = `Throw Force: ${force.toFixed(2)} N`;
-
-            // Track maximum force during the throw
-            if (force > maxForce) {
-                maxForce = force;
-                document.getElementById('maxForceResult').textContent = `Max Force: ${maxForce.toFixed(2)} N`;
-            }
-        }
-
-        // Function to detect if the phone has stopped moving
-        function detectStop() {
-            if (Math.abs(accX) < 0.5 && Math.abs(accY) < 0.5 && Math.abs(accZ) < 0.5) {
-                if (isMoving) {
-                    // Phone has stopped moving, display the final max force
-                    alert(`Throw stopped! Max Force during the throw was: ${maxForce.toFixed(2)} N`);
-                    isMoving = false;
-                }
+        // Request permission to use accelerometer on mobile devices
+        function requestPermission() {
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            startListening();
+                        } else {
+                            alert('Permission denied for motion sensors.');
+                        }
+                    })
+                    .catch(console.error);
             } else {
-                isMoving = true; // Phone is still moving
+                startListening();
             }
         }
 
-        // Check if the device supports DeviceMotionEvent
-        if (window.DeviceMotionEvent) {
-            window.addEventListener('devicemotion', handleMotion, true);
-            // Check if the phone has stopped moving every 1 second
-            setInterval(detectStop, 1000);
-        } else {
-            alert("DeviceMotion is not supported on this device.");
+        // Start the measuring process
+        document.getElementById('start-button').addEventListener('click', function() {
+            measuring = true;
+            velocity = 0;
+            displacement = 0;
+            accelerationHistory = [];
+            trajectoryData.labels = [];
+            trajectoryData.datasets[0].data = [];
+            document.getElementById('impact-force').textContent = 'Impact Force: Measuring...';
+            document.getElementById('velocity').textContent = 'Velocity: Measuring...';
+            document.getElementById('distance-travelled').textContent = 'Distance Traveled: Measuring...';
+            requestPermission();
+        });
+
+        function startListening() {
+            if ('DeviceMotionEvent' in window) {
+                window.addEventListener('devicemotion', function(event) {
+                    let totalAcceleration = Math.sqrt(
+                        Math.pow(event.acceleration.x || 0, 2) +
+                        Math.pow(event.acceleration.y || 0, 2) +
+                        Math.pow(event.acceleration.z || 0, 2)
+                    );
+
+                    let now = Date.now();
+                    let deltaTime = (now - lastUpdate) / 1000;  // time in seconds
+                    lastUpdate = now;
+
+                    // Update velocity by integrating acceleration
+                    velocity += totalAcceleration * deltaTime; // m/s
+
+                    // Update displacement (distance) by integrating velocity
+                    displacement += velocity * deltaTime; // meters
+
+                    // Update the acceleration history
+                    accelerationHistory.push(totalAcceleration);
+
+                    // Calculate the force with which the phone was thrown
+                    force = mass * totalAcceleration; // F = ma
+
+                    // Update the trajectory
+                    trajectoryData.labels.push(trajectoryData.labels.length);
+                    trajectoryData.datasets[0].data.push(displacement);
+
+                    // Display the data
+                    document.getElementById('velocity').textContent = 'Velocity: ' + velocity.toFixed(2) + ' m/s';
+                    document.getElementById('distance-travelled').textContent = 'Distance Traveled: ' + displacement.toFixed(2) + ' m';
+                    document.getElementById('impact-force').textContent = 'Impact Force: ' + force.toFixed(2) + ' N';
+
+                    // Update the plot
+                    updatePlot();
+
+                });
+            } else {
+                alert('Accelerometer not supported on this device.');
+            }
+        }
+
+        function updatePlot() {
+            const ctx = document.getElementById('trajectory').getContext('2d');
+            if (window.trajectoryChart) {
+                window.trajectoryChart.update();
+            } else {
+                window.trajectoryChart = new Chart(ctx, {
+                    type: 'line',
+                    data: trajectoryData,
+                    options: {
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Time (s)'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Distance (m)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         }
     </script>
 </body>
